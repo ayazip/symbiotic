@@ -68,7 +68,13 @@ class SymbioticTool(KleeBase):
         if opts.timeout is not None:
                cmd.append('-max-time={0}'.format(opts.timeout))
 
-        # assert prop.unreachcall(), "Witch-KLEE can do unreach call only"
+        if prop.memsafety():
+            if opts.sv_comp:
+                cmd.append('-check-leaks')
+            else: # if not in SV-COMP, consider any unfreed memory as a leak
+                cmd.append('-check-memcleanup')
+        elif prop.memcleanup():
+            cmd.append('-check-memcleanup')
 
         # filter out the non-standard error calls,
         # because we support only one such call atm.
@@ -99,6 +105,7 @@ class SymbioticTool(KleeBase):
             return 'ERROR (no output)'
 
         parsing_failed = None
+        unknown = False
         for line in output:
             if b'Parsing failed' in line:
                 parsing_failed = line.strip().split(b':')[-1].strip().decode('utf-8')
@@ -116,7 +123,7 @@ class SymbioticTool(KleeBase):
                 if b'no-overflow' in line:
                     return result.RESULT_FALSE_OVERFLOW
             if b'unconfirmed' in line:
-                return result.RESULT_TRUE_PROP
+                unknown = True
         if returncode != 0:
             if parsing_failed:
                 return f'{result.RESULT_ERROR} ({parsing_failed})'
@@ -124,7 +131,7 @@ class SymbioticTool(KleeBase):
         if returnsignal != 0:
             return f'{result.RESULT_ERROR} (signal {returnsignal})'
 
-        return result.RESULT_UNKNOWN
+        return result.RESULT_UNKNOWN if unknown else result.RESULT_TRUE_PROP
 
 
     def set_environment(self, env, opts):
