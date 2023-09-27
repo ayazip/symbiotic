@@ -171,7 +171,7 @@ class ValidationTransformer:
                         self._insert.append((waypoint['location']['line'],
                                              waypoint['location']['column'],
                                              'assumption',
-                                             (waypoint['constraint']['string'], s_index,
+                                             (waypoint['constraint']['value'], s_index,
                                               waypoint['action'] == 'follow', prefix)))
 
                     if waypoint["type"] == "branching":
