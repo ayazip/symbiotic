@@ -11,6 +11,7 @@ from . utils.process import ProcessRunner, runcmd
 from . utils.watch import ProcessWatch, DbgWatch
 from . utils.utils import print_stdout, print_stderr, process_grep
 from . exceptions import SymbioticException
+from symbiotic.witnesses.witchtransformer import ValidationTransformer
 from shutil import move
 
 class PrepareWatch(ProcessWatch):
@@ -754,6 +755,10 @@ class SymbioticCC(object):
 
         self._disable_and_rename_optimizations(self._tool.llvm_version())
 
+        if self.options.witness_check:
+            self.validation_preprocessing()
+            
+
         #################### #################### ###################
         # COMPILATION
         #  - compile the code into LLVM bitcode
@@ -932,4 +937,15 @@ class SymbioticCC(object):
                 raise SymbioticException(msg)
 
         return self.curfile
+
+    def validation_preprocessing(self):
+        assert len(self.sources) == 1
+        program_transformed =  os.path.basename(self.sources[0])
+        witness_transformed =  os.path.basename(self.options.witness_check_file)
+        transformer = ValidationTransformer(self.sources[0], self.options.witness_check_file, program_transformed, witness_transformed)
+        transformer.transform()
+        
+        self.options.witness_check_file = witness_transformed
+        self.sources = [program_transformed]
+        return 
 
