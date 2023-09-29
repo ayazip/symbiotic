@@ -196,8 +196,6 @@ class ValidationTransformer:
                 yaml.dump(witness, witness_file2, default_style=None)
             with open(self.out_program, "w") as program_file2:
                 program_file2.writelines(self.c_lines)
-            with open("/home/paula/Lab/witnesstext.yml", "w") as witness_file3:
-                yaml.dump(witness, witness_file3, default_style=None)
 
 
     def insert(self):
