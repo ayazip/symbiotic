@@ -293,6 +293,7 @@ class SymbioticTool(BaseTool, SymbioticBaseTool):
                            #'--output-istats=0',
                            '-only-output-states-covering-new=1',
                            '-use-forked-solver=0',
+                           '--libc=klee',
                            '-external-calls=pure', '-max-memory=8000']
 
     def can_replay(self):

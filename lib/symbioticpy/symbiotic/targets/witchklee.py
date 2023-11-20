@@ -68,8 +68,6 @@ class SymbioticTool(KleeBase):
         if opts.timeout is not None:
                cmd.append('-max-time={0}'.format(opts.timeout))
 
-        # assert prop.unreachcall(), "Witch-KLEE can do unreach call only"
-
         # filter out the non-standard error calls,
         # because we support only one such call atm.
         if prop.unreachcall():
