@@ -91,12 +91,15 @@ WITH_LLVM_SRC=
 WITH_LLVM_DIR=
 WITH_LLVMCBE='no'
 BUILD_STP='no'
-BUILD_Z3='no'
+BUILD_Z3='yes'
 BUILD_SVF='no'
 BUILD_PREDATOR='no'
-BUILD_LLVM2C='yes'
+BUILD_LLVM2C='no'
+BUILD_LLVMLITE='no'
+BUILD_SLOWBEAST='no'
 
-BUILD_KLEE="yes"
+BUILD_KLEE="no"
+BUILD_WITCH_KLEE="yes"
 BUILD_NIDHUGG="no"
 
 
@@ -106,8 +109,9 @@ HAVE_GTEST=$(if check_gtest; then echo "yes"; else echo "no"; fi)
 WITH_ZLIB=$(if check_zlib; then echo "no"; else echo "yes"; fi)
 ENABLE_TCMALLOC=$(if check_tcmalloc; then echo "on"; else echo "off"; fi)
 
-ARCHIVE="no"
-FULL_ARCHIVE="no"
+ARCHIVE="yes"
+FULL_ARCHIVE="yes"
+ARCHIVE_PREFIX="symbiotic/"
 PRECOMPILE_BITCODE="yes"
 
 while [ $# -gt 0 ]; do
@@ -136,6 +140,9 @@ while [ $# -gt 0 ]; do
 		;;
 		'no-klee')
 			BUILD_KLEE=no
+		;;
+		'witch-klee')
+			BUILD_WITCH_KLEE=yes
 		;;
 		'no-llvm2c')
 			BUILD_LLVM2C="no"
@@ -168,6 +175,9 @@ while [ $# -gt 0 ]; do
 			ARCHIVE="yes"
 			FULL_ARCHIVE="yes"
 		;;
+        archive-prefix=*)
+            ARCHIVE_PREFIX=${1##*=}
+        ;;
 		with-llvm=*)
 			WITH_LLVM=${1##*=}
 		;;
@@ -201,12 +211,22 @@ if [ "x$OPTS" = "x" ]; then
 	OPTS='-j1'
 fi
 
+if [ -d witch-klee ]; then
+	echo "Found a build of witch-klee, turning its build on"
+	BUILD_WITCH_KLEE="yes"
+fi
+
 PHASE="checking system"
 export LLVM_PREFIX="$PREFIX/llvm-$LLVM_VERSION"
 
 if [ "$HAVE_32_BIT_LIBS" = "no" -a "$BUILD_KLEE" = "yes" ]; then
 	exitmsg "KLEE needs 32-bit libc headers to build 32-bit versions of runtime libraries. On Ubuntu, this is the package libc6-dev-i386 (or gcc-multilib), on Fedora-based systems it is glibc-devel.i686."
 fi
+if [ "$HAVE_32_BIT_LIBS" = "no" -a "$BUILD_WITCH_KLEE" = "yes" ]; then
+	exitmsg "KLEE needs 32-bit libc headers to build 32-bit versions of runtime libraries. On Ubuntu, this is the package libc6-dev-i386 (or gcc-multilib), on Fedora-based systems it is glibc-devel.i686."
+fi
+
+
 
 if [ "$HAVE_Z3" = "no" -a "$BUILD_STP" = "no" ]; then
 	if [ ! -d "z3" ]; then
@@ -267,7 +287,7 @@ check()
 		MISSING="patch $MISSING"
 	fi
 
-	if [ "$BUILD_KLEE" = "yes" ]; then
+	if [ "$BUILD_KLEE" = "yes" -o "$BUILD_WITCH_KLEE" = "yes" ]; then
 		if ! which unzip &>/dev/null; then
 			echo "Need 'unzip' utility"
 			MISSING="unzip $MISSING"
@@ -380,6 +400,9 @@ build_llvm()
 			patch -p0 --dry-run < $ABS_SRCDIR/patches/force_lifetime_markers.patch || exitmsg "Patching LLVM"
 			patch -p0 < $ABS_SRCDIR/patches/force_lifetime_markers.patch || exitmsg "Patching LLVM"
 			popd
+		fi
+		if [ "$LLVM_VERSION" = "10.0.1" ]; then
+			cp ./patches/benchmark_register.h.LLVM-10.0.1.patch llvm-${LLVM_VERSION}/utils/benchmark/src/benchmark_register.h
 		fi
 
 		rm -f llvm-${LLVM_VERSION}.src.tar.xz &>/dev/null || exitmsg "Removing downloaded archive"
@@ -536,11 +559,11 @@ if [ "`pwd`" != $ABS_SRCDIR ]; then
 fi
 
 ######################################################################
-#   dg
+#   sbt-dg
 ######################################################################
-PHASE="building dg"
+PHASE="building sbt-dg"
 if [ $FROM -le 1 ]; then
-	if [  "x$UPDATE" = "x1" -o -z "$(ls -A $SRCDIR/dg)" ]; then
+	if [  "x$UPDATE" = "x1" -o -z "$(ls -A $SRCDIR/sbt-dg)" ]; then
 		git_submodule_init
 	fi
 
@@ -549,7 +572,7 @@ if [ $FROM -le 1 ]; then
 	fi
 
 	# download the dg library
-	pushd "$SRCDIR/dg" || exitmsg "Cloning failed"
+	pushd "$SRCDIR/sbt-dg" || exitmsg "Cloning failed"
 	mkdir -p build-${LLVM_VERSION} || exitmsg "error"
 	pushd build-${LLVM_VERSION} || exitmsg "error"
 
@@ -567,7 +590,7 @@ if [ $FROM -le 1 ]; then
 			|| clean_and_exit 1 "git"
 	fi
 
-	(build && make install) || exitmsg "Building and installing DG"
+	(build && make install) || exitmsg "Building and installing sbt-dg"
 	popd
 	popd
 fi
@@ -598,7 +621,7 @@ if [ $FROM -le 1 ]; then
 			-DLLVM_BUILD_PATH="$LLVM_BUILD_PATH" \
 			-DLLVM_DIR=$LLVM_DIR \
 			-DLLVM_LINK_DYLIB="$LLVM_DYLIB" \
-			-DDG_PATH=$ABS_SRCDIR/dg \
+			-DDG_PATH=$ABS_SRCDIR/sbt-dg \
 			-DCMAKE_INSTALL_PREFIX=$LLVM_PREFIX \
 			-DCMAKE_INSTALL_RPATH="\$ORIGIN/../lib" \
 			|| clean_and_exit 1 "git"
@@ -721,9 +744,9 @@ if [ "$BUILD_Z3" = "yes" ]; then
 	######################################################################
 	#   Z3
 	######################################################################
-	if [ $FROM -le 4 -a "$BUILD_KLEE" = "yes" ]; then
+	if [ $FROM -le 4 -a "$BUILD_WITCH_KLEE" = "yes" ]; then
 		if [ ! -d "z3" ]; then
-			git_clone_or_pull git://github.com/Z3Prover/z3 -b "z3-4.8.4" z3
+			git_clone_or_pull https://github.com/Z3Prover/z3 -b "z3-4.8.4" z3
 		fi
 
 		mkdir -p "z3/build" && pushd "z3/build"
@@ -756,13 +779,25 @@ if [ "`pwd`" != $ABS_SRCDIR ]; then
 fi
 
 ######################################################################
+#   Witch-KLEE
+######################################################################
+PHASE="building Witch-KLEE"
+if [ $FROM -le 4  -a "$BUILD_WITCH_KLEE" = "yes" ]; then
+	source scripts/build-witch-klee.sh
+fi
+
+if [ "`pwd`" != $ABS_SRCDIR ]; then
+	exitmsg "Inconsistency in the build script, should be in $ABS_SRCDIR"
+fi
+
+
+######################################################################
 #   nidhugg
 ######################################################################
 PHASE="building Nidhugg"
 if [ $FROM -le 4  -a "$BUILD_NIDHUGG" = "yes" ]; then
 	if [ ! -d nidhugg ]; then
 		git_clone_or_pull "https://github.com/nidhugg/nidhugg"
-
 	fi
 
 	mkdir -p nidhugg/build-${LLVM_VERSION}
@@ -826,6 +861,10 @@ PHASE="building Predator"
 if [ $FROM -le 6 -a "$BUILD_PREDATOR" = "yes" ]; then
 	if [ ! -d predator-${LLVM_VERSION} ]; then
                git_clone_or_pull "https://github.com/staticafi/predator" -b svcomp21-v1 predator-${LLVM_VERSION}
+
+				pushd predator-${LLVM_VERSION}
+				git apply ../patches/cclib.sh.predator.patch
+				popd
 	fi
 
 	pushd predator-${LLVM_VERSION}
@@ -878,7 +917,7 @@ if [ $FROM -le 6 ]; then
 			-DLLVM_BUILD_PATH="$LLVM_BUILD_PATH" \
 			-DLLVM_DIR=$LLVM_DIR \
 			-DLLVM_LINK_DYLIB="$LLVM_DYLIB" \
-			-DDG_PATH=$ABS_SRCDIR/dg \
+			-DDG_PATH=$ABS_SRCDIR/sbt-dg \
 			-DCMAKE_INSTALL_PREFIX=$LLVM_PREFIX \
 			|| clean_and_exit 1 "git"
 	fi
@@ -923,6 +962,61 @@ fi
 fi
 
 ######################################################################
+#   sbt-llvmlite
+######################################################################
+PHASE="building sbt-llvmlite"
+if [ $FROM -le 6 -a "$BUILD_LLVMLITE" = "yes" ]; then
+	if [  "x$UPDATE" = "x1" -o -z "$(ls -A $SRCDIR/sbt-llvmlite)" ]; then
+		git_submodule_init
+	fi
+
+	pushd "$SRCDIR/sbt-llvmlite" || exitmsg "sbt-llvmlite: pushd command has failed."
+
+	export LLVM_CONFIG=${LLVM_BUILD_PATH}/bin/llvm-config
+	if [ ! -e ${LLVM_CONFIG} ];then
+		echo "Error: Invalid path to Symbiotic's LLVM build:" ${LLVM_CONFIG} ;
+		echo "       Symbiotic's LLVM dir name:" ${LLVM_BUILD_PATH} ;
+		exit 1 ;
+	fi
+	python3 setup.py build
+
+	popd
+fi
+
+if [ "`pwd`" != $ABS_SRCDIR ]; then
+	exitmsg "Inconsistency in the build script, should be in $ABS_SRCDIR"
+fi
+
+######################################################################
+#   sbt-slowbeast
+######################################################################
+PHASE="building sbt-slowbeast"
+if [ $FROM -le 6 -a "$BUILD_SLOWBEAST" = "yes" ]; then
+	if [  "x$UPDATE" = "x1" -o -z "$(ls -A $SRCDIR/sbt-slowbeast)" ]; then
+		git_submodule_init
+
+		pip3 install z3-solver
+		pip3 install pyinstaller
+	fi
+
+	pushd "$SRCDIR/sbt-slowbeast" || exitmsg "sbt-slowbeast: pushd command has failed."
+
+	if [ -d ./dist ];then
+		rm -Rf ./dist
+	fi
+	pyinstaller -p ../sbt-llvmlite --collect-binaries z3 sb
+
+	mkdir -p ../install/slowbeast
+	cp -r ./dist/sb/* ../install/slowbeast
+
+	popd
+fi
+
+if [ "`pwd`" != $ABS_SRCDIR ]; then
+	exitmsg "Inconsistency in the build script, should be in $ABS_SRCDIR"
+fi
+
+######################################################################
 #   copy lib and include files
 ######################################################################
 PHASE="installing files and function models"
@@ -958,4 +1052,12 @@ if [ $FROM -le 7 ]; then
 
     PHASE="creating distribution"
 	source scripts/push-to-git.sh
+
+    PHASE="building distribution ZIP file"
+	cd $ABS_SRCDIR
+	mv ./install ./symbiotic
+	zip -r symbiotic-witch.zip ./symbiotic
+	mv ./symbiotic ./install
 fi
+
+echo "Build finished successfully."
