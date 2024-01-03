@@ -122,7 +122,7 @@ class SymbioticTool(KleeBase):
                     return result.RESULT_FALSE_MEMCLEANUP
                 if b'no-overflow' in line:
                     return result.RESULT_FALSE_OVERFLOW
-            if b'unconfirmed' in line:
+            if b'may not be confirmed' in line:
                 unknown = True
         if returncode != 0:
             if parsing_failed:
