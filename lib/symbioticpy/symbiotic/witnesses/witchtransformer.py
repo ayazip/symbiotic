@@ -142,6 +142,10 @@ class ValidationTransformer:
                 segment = s["segment"]
                 for w in segment:
                     waypoint = w["waypoint"]
+                    assert 'location' in waypoint.keys(), "Location must be specified!"
+                    assert 'line' in waypoint['location'].keys(), "Line must be specified!"
+                    assert 'column' in waypoint['location'].keys(), "Currently, Witch requires the column number"
+   
                     loc = (waypoint['location']['line'], waypoint['location']['column'])
 
                     if waypoint["type"] == "function_return":
@@ -196,6 +200,7 @@ class ValidationTransformer:
                 yaml.dump(witness, witness_file2, default_style=None)
             with open(self.out_program, "w") as program_file2:
                 program_file2.writelines(self.c_lines)
+            
 
 
     def insert(self):
