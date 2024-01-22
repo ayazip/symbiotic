@@ -75,10 +75,17 @@ class ValidationTransformer:
         # check if we have a begin and end
         loc = re.search("^[^-]*-[a-zA-Z]* 0x[0-9A-Fa-f]* <([^>,]*), ([^,]*)>", line)
 
-        if not loc:  # if not, we only care about the line
-            ln = re.search("^[^-]*-[a-zA-Z]* 0x[0-9A-Fa-f]* <line:([0-9]*)", line)
-            if ln:
-                last_ln = int(ln[1])
+        if not loc:  # if not, we only care about the start
+            loc = re.search("^[^-]*-[a-zA-Z]* 0x[0-9A-Fa-f]* <line:([0-9]*):([0-9]*)>", line) 
+            if loc:
+                location["start_col"] = int(loc[2])
+                location["end_col"] = int(loc[2])
+            else:
+                loc = re.search("^[^-]*-[a-zA-Z]* 0x[0-9A-Fa-f]* <line:([0-9]*)", line)
+            if loc:
+                location["start_ln"] = int(loc[1])
+                location["end_ln"] = int(loc[1])
+                last_ln = int(loc[1])
             return location, correct_file, last_ln
 
         start = loc[1]
@@ -130,7 +137,8 @@ class ValidationTransformer:
                 open(self.program, "r") as c_file:
 
             self.c_lines = c_file.readlines()
-            ast = subprocess.run(['clang', '-Xclang', '-ast-dump', '-fsyntax-only', '-fno-color-diagnostics',
+            ast = subprocess.run(['clang', '-Xclang', '-ast-dump', '-fsyntax-only', 
+                                  '-fbracket-depth=-1', '-fno-color-diagnostics',
                                   self.program],
                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode('utf-8')
             self.parse_ast(ast)
@@ -148,7 +156,7 @@ class ValidationTransformer:
    
                     loc = (waypoint['location']['line'], waypoint['location']['column'])
 
-                    if waypoint["type"] == "function_return":
+                    if waypoint["type"] == "function_return" or waypoint["type"] == "function_enter":
                         if loc not in self._call_map:
                             print("Invalid location for function call:", loc)
                             continue
@@ -244,6 +252,15 @@ class ValidationTransformer:
                         if waypoint["location"]["column"] >= col:
                             add += self._shift[waypoint["location"]["line"]][col]
                     waypoint["location"]["column"] += add
+
+        target = content[-1]["segment"][-1]["waypoint"]
+        if "location2" in target and target["location2"]["line"] in self._shift.keys():
+            add = 0
+            for col in self._shift[waypoint["location2"]["line"]]:
+                if target["location2"]["column"] >= col:
+                    add += self._shift[target["location2"]["line"]][col]
+                target["location2"]["column"] += add
+
         return content
 
 
