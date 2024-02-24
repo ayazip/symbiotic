@@ -774,9 +774,9 @@ if [ "`pwd`" != $ABS_SRCDIR ]; then
 fi
 
 ######################################################################
-#   Which-KLEE
+#   Witch-KLEE
 ######################################################################
-PHASE="building Which-KLEE"
+PHASE="building Witch-KLEE"
 if [ $FROM -le 4  -a "$BUILD_WITCH_KLEE" = "yes" ]; then
 	source scripts/build-witch-klee.sh
 fi
