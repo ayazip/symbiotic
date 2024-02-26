@@ -1,7 +1,7 @@
 #!/bin/sh
 
 if [ ! -d witch-klee ]; then
-	git_clone_or_pull "https://github.com/ayazip/klee-error-witness-checker" witch-klee
+	git_clone_or_pull "https://github.com/ayazip/witch-klee" witch-klee
 	pushd witch-klee
 	if [  "x$UPDATE" = "x1" -o -z "$(ls -A $SRCDIR/klee)" ]; then
 		git_submodule_init
@@ -78,29 +78,34 @@ if [ "$UPDATE" = "1" ]; then
 fi
 
 # clean runtime libs, it may be 32-bit from last build
-make -C runtime -f Makefile.cmake.bitcode clean 2>/dev/null
+# make -C runtime -f Makefile.cmake.bitcode clean  2>/dev/null
 
 # build 64-bit libs and install them to prefix
 (build && make install) || exit 1
 
-mv $WKLEE_PREFIX/lib64/klee $WKLEE_PREFIX/lib/klee || true
-rmdir $WKLEE_PREFIX/lib64 || true
+mkdir -p $WKLEE_PREFIX/lib32/klee/runtime
+cp $LLVM_PREFIX/lib32/klee/runtime/* $WKLEE_PREFIX/lib32/klee/runtime \
+        || exitmsg "Cannot move 32-bit klee runtime lib files."
+
+# mv $WKLEE_PREFIX/lib64/klee $WKLEE_PREFIX/lib/klee || true
+# rmdir $WKLEE_PREFIX/lib64 || true
 
 # clean 64-bit build and build 32-bit version of runtime library
-make -C runtime -f Makefile.cmake.bitcode clean \
-	|| exitmsg "Failed building klee 32-bit runtime library"
+# make -C runtime -f Makefile.cmake.bitcode clean \
+#	|| exitmsg "Failed building klee 32-bit runtime library"
 
 # EXTRA_LLVMCC.Flags is obsolete and to be removed soon
-make -C runtime -f Makefile.cmake.bitcode \
-	LLVMCC.ExtraFlags=-m32 \
-	EXTRA_LLVMCC.Flags=-m32 \
-	|| exitmsg "Failed building 32-bit klee runtime library"
+# make -C runtime -f Makefile.cmake.bitcode \
+#	LLVMCC.ExtraFlags=-m32 \
+#	EXTRA_LLVMCC.Flags=-m32 \
+#	|| exitmsg "Failed building 32-bit klee runtime library"
 
 # copy 32-bit library version to prefix
-mkdir -p $WKLEE_PREFIX/lib32/klee/runtime
-cp ${BUILD_TYPE}/lib/*.bc* \
-	$WKLEE_PREFIX/lib32/klee/runtime/ \
-	|| exitmsg "Did not build 32-bit klee runtime lib"
+# mkdir -p $WKLEE_PREFIX/lib32/klee/runtime
+# cp ${BUILD_TYPE}/lib/*.bc* \
+# 	$WKLEE_PREFIX/lib32/klee/runtime/ \
+# 	|| exitmsg "Did not build 32-bit klee runtime lib"
+
 
 popd
 
