@@ -27,6 +27,7 @@ class ValidationTransformer:
 
         for i in range(len(lines)):
             line = lines[i]
+
             location, this_file, last_ln = self.get_location(line, this_file, last_ln)
 
             if not this_file:
@@ -137,10 +138,12 @@ class ValidationTransformer:
                 open(self.program, "r") as c_file:
 
             self.c_lines = c_file.readlines()
+
             ast = subprocess.run(['clang', '-Xclang', '-ast-dump', '-fsyntax-only', 
-                                  '-fbracket-depth=-1', '-fno-color-diagnostics',
+                                  '-fbracket-depth=1000', '-fno-color-diagnostics',
                                   self.program],
                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode('utf-8')
+
             self.parse_ast(ast)
             witness = yaml.safe_load(witness_file)
             content = witness[0]["content"]
