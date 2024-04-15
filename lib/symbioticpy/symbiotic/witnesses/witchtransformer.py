@@ -107,7 +107,7 @@ class ValidationTransformer:
             if (start.line, start.column) in self._branchings:
                 self._handle_branching(child, (start.line, start.column))
             if (start.line, 0) in self._branchings and not self._branchings[(start.line, 0)]:
-                self._handle_branching(child, start.line, 0)
+                self._handle_branching(child, (start.line, 0))
 
             if child.kind == clang.cindex.CursorKind.CONDITIONAL_OPERATOR:
                 self._handle_ternary(child)
