@@ -216,6 +216,9 @@ class SymbioticCC(object):
                                 '-fgnu89-inline',
                                 '-D__inline='] + opts
 
+        if self.options.witness_check:
+            cmd.append('-includewitch.h')
+
         if with_g:
             cmd.append('-g')
 
