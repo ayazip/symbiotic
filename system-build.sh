@@ -33,7 +33,7 @@ ABS_SRCDIR=`abspath $SRCDIR`
 
 
 usage()
-{
+{	echo USAGE
 	echo "$0 [archive | full-archive] [update] [slicer | scripts | klee | witness | bin] OPTS"
 	echo "" # new line
 	echo -e "build-type=TYPE    - set Release/Debug build"
@@ -70,6 +70,7 @@ LLVM_CONFIG=
 while [ $# -gt 0 ]; do
 	case $1 in
 		'help'|'--help')
+			set +x
 			usage
 			exit 0
 		;;
