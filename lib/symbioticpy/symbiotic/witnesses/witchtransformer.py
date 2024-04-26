@@ -11,10 +11,10 @@ class ValidationTransformer:
         self.out_program = out_program
         self.out_witness = out_witness
 
-        with open(self.witness_file, "r") as file:
+        with open(self.witness_file, 'r') as file:
             self.witness = yaml.safe_load(file)
 
-        with open(self.program_file, "r") as c_file:
+        with open(self.program_file, 'r') as c_file:
             self.c_lines = c_file.readlines()
 
         # Keep information about the statements and expressions mentioned in the witness:
@@ -33,58 +33,62 @@ class ValidationTransformer:
 
     def check_witness_structure(self):
         # basic syntax checks
-        assert len(self.witness) == 1, "Multiple or missing entries in witness!"
-        assert "content" in self.witness[0], "Missing witness content!"
-        assert "metadata" in self.witness[0], "Missing witness metadata!"
-        assert "entry_type" in self.witness[0], "Missing witness entry_type!"
-        assert self.witness[0]["entry_type"] == "violation_sequence", "Invalid entry type!"
-        assert len(self.witness[0]["content"]) >= 1, "Invalid witness syntax!"
+        assert len(self.witness) == 1, 'Multiple or missing entries in witness!'
+        assert 'content' in self.witness[0], 'Missing witness content!'
+        assert 'metadata' in self.witness[0], 'Missing witness metadata!'
+        assert 'entry_type' in self.witness[0], 'Missing witness entry_type!'
+        assert self.witness[0]['entry_type'] == 'violation_sequence', 'Invalid entry type!'
+        assert len(self.witness[0]['content']) >= 1, 'Invalid witness syntax!'
 
     def _get_witness_locations(self):
         # collect relevant program locations and their types and check basic syntax
         # of the witness
 
-        for s in self.witness[0]["content"]:
-            assert "segment" in s, "Invalid witness syntax!"
-            segment = s["segment"]
+        for s in self.witness[0]['content']:
+            assert 'segment' in s, 'Invalid witness syntax!'
+            segment = s['segment']
 
             for w in segment:
-                assert "waypoint" in w, "Invalid witness syntax!"
-                waypoint = w["waypoint"]
+                assert 'waypoint' in w, 'Invalid witness syntax!'
+                waypoint = w['waypoint']
 
-                assert 'location' in waypoint.keys(), "Missing waypoint location!"
-                assert 'line' in waypoint['location'].keys(), "Missing line in waypoint location!"
-                assert 'type' in waypoint.keys(), "Missing waypoint type!"
-                assert 'action' in waypoint.keys(), "Missing waypoint action!"
+                assert 'location' in waypoint.keys(), 'Missing waypoint location!'
+                assert 'file_name' in waypoint['location'].keys(), 'Missing filename in waypoint location!'
+                assert waypoint['location']['file_name'] == self.program_file, 'Filename in witness location does not match the program file'
+                assert 'line' in waypoint['location'].keys(), 'Missing line in waypoint location!'
+                assert 'type' in waypoint.keys(), 'Missing waypoint type!'
+                assert 'action' in waypoint.keys(), 'Missing waypoint action!'
 
                 if waypoint['action'] == 'follow':
                     assert w == segment[-1]
 
                 line = waypoint['location']['line']
-                col = waypoint['location']['column'] if "column" in waypoint['location'] else 0
+                if 'column' not in waypoint['location']:
+                    waypoint['location']['column'] = 0
+                col = waypoint['location']['column'] # if 'column' in waypoint['location'] else 0
 
-                if waypoint["type"] == "target":
-                    assert waypoint["action"] == "follow"
-                    assert s == self.witness[0]["content"][-1]
+                if waypoint['type'] == 'target':
+                    assert waypoint['action'] == 'follow'
+                    assert s == self.witness[0]['content'][-1]
                     self._target[line, col] = None
                     break
 
                 map = None
-                if waypoint["type"] == "function_return" or waypoint["type"] == "function_enter":
+                if waypoint['type'] == 'function_return' or waypoint['type'] == 'function_enter':
                     map = self._calls
-                if waypoint["type"] == "assumption":
+                if waypoint['type'] == 'assumption':
                     map = self._assumptions
-                if waypoint["type"] == "branching":
+                if waypoint['type'] == 'branching':
                     map = self._branchings
                     self._switches[(line, col)] = None
 
-                assert map is not None, "Unknown waypoint type!"
+                assert map is not None, 'Unknown waypoint type!'
 
                 map[(line, col)] = None
 
     # Traverse the AST, find the locations mentioned in the witness and store information
     # about them in one of: _calls, _assumptions, _branchings, _target.
-    def traverse_AST(self, node):
+    def traverse_AST(self, node, full=True):
         # Recurse for children of this node
         child_index = 0
         for child in node.get_children():
@@ -97,10 +101,10 @@ class ValidationTransformer:
             # For all function calls and returns, we change the location
             # from the right paranthesis to the position of the call.
             if child.kind == clang.cindex.CursorKind.CALL_EXPR:
-                if (end.line, end.column) in self._calls:
-                    self._calls[end.line][end.column] = start.line, start.column
+                if (end.line, end.column - 1) in self._calls:
+                    self._calls[(end.line, end.column - 1)] = start.line, start.column
                 if (end.line, 0) in self._calls and not self._calls[(end.line, 0)]:
-                    self._calls[end.line][0] = start.line, start.column
+                    self._calls[(end.line, 0)] = start.line, start.column
 
             # For branching waypoints, we find the corresponding control expression
             # and assign an identifier.
@@ -138,15 +142,13 @@ class ValidationTransformer:
             if (start.line, start.column) in self._target \
                     or ((start.line, 0) in self._target and not self._target[(start.line, 0)]):
 
-                if child.kind.is_expression():
+                if child.kind.is_expression() and full:
                     col = 0 if (start.line, 0) in self._target else start.column
                     self._target[(start.line, col)] = \
                         (start.line, start.column), (child.extent.end.line, child.extent.end.column)
 
             child_index += 1
-
-            if not child.kind.is_expression():
-                self.traverse_AST(child)
+            self.traverse_AST(child, full and not child.kind.is_expression()) 
 
     def _handle_ternary(self, node):
         children = list(node.get_children())
@@ -200,41 +202,39 @@ class ValidationTransformer:
         sys.setrecursionlimit(2048)
 
         index = clang.cindex.Index.create()
-        tu = index.parse(self.program_file, args=["-fbracket-depth=2048"])
+        tu = index.parse(self.program_file, args=['-fbracket-depth=2048'])
         root = tu.cursor
 
         self.traverse_AST(root)
 
-        content = self.witness[0]["content"]
+        content = self.witness[0]['content']
         s_index = 0
         conditions_covered = set()
         for s in content:
-            segment = s["segment"]
+            segment = s['segment']
             for w in segment:
-                waypoint = w["waypoint"]
+                waypoint = w['waypoint']
 
                 line = waypoint['location']['line']
                 col = waypoint['location']['column']
 
-                if waypoint["type"] == "function_return" or waypoint["type"] == "function_enter":
-                    if not self._calls[line, col]:
-                        print("Invalid location for function call or return:", loc)
-                        continue
-                    waypoint['location']['line'], waypoint['location']['column'] = self._call_map[loc]
+                if waypoint['type'] == 'function_return' or waypoint['type'] == 'function_enter':
+                    if self._calls[line, col] is None:
+                        sys.exit('Invalid location for function call or return: {},{}'.format(line, col))
 
-                if waypoint["type"] == "target":
+                    waypoint['location']['line'], waypoint['location']['column'] = self._calls[line, col]
+
+                if waypoint['type'] == 'target':
                     if self._target[line, col] is None:
-                        print("Invalid location for target:", line, col)
-                        continue
-
+                        sys.exit('Invalid location for target: {},{}'.format(line, col))
+ 
                     waypoint['location']['column'] = self._target[line, col][0][1]
                     waypoint['location2'] = {}
                     waypoint['location2']['line'], waypoint['location2']['column'] = self._target[line, col][1]
 
-                if waypoint["type"] == "assumption":
+                if waypoint['type'] == 'assumption':
                     if not self._assumptions[line, col]:
-                        print("Invalid location for assumption:", line, col)
-                        continue
+                        sys.exit('Invalid location for branching: {},{}'.format(line, col))
 
                     start, end, bracket = self._assumptions[line, col]
 
@@ -245,17 +245,19 @@ class ValidationTransformer:
                                              s_index, waypoint['action'] == 'follow', bracket)
                     self._insert.append((start[0], start[1], call))
 
-                if waypoint["type"] == "branching":
+                if waypoint['type'] == 'branching':
 
                     if self._branchings[line, col] is not None:
                         ctrl_expr_start, ctrl_expr_end, column = self._branchings[line, col]
-                        fun = "__VALIDATOR_branch"
+                        fun = '__VALIDATOR_branch'
                     elif self._switches[line, col] is not None:
                         ctrl_expr_start, ctrl_expr_end, column = self._switches[line, col]
-                        fun = "__VALIDATOR_switch"
+                        fun = '__VALIDATOR_switch'
                     else:
-                        print("Invalid location for branching:", line, col)
-                        continue
+                        sys.exit('Invalid location for branching: {},{}'.format(line, col))
+                    
+                    if col == 0:
+                        waypoint['location']['column'] = column
 
                     loc = (line, column)
                     if loc not in conditions_covered:
@@ -267,11 +269,12 @@ class ValidationTransformer:
             s_index += 1
 
         self._insert_calls()
-        self.witness[0]["content"] = self._shift_witness(content)
+        self.witness[0]['content'] = self._shift_witness(content)
 
-        with open(self.out_witness, "w") as witness_file2:
+        with open(self.out_witness, 'w') as witness_file2:
             yaml.dump(self.witness, witness_file2, default_style=None)
-        with open(self.out_program, "w") as program_file2:
+
+        with open(self.out_program, 'w') as program_file2:
             program_file2.writelines(self.c_lines)
 
     def _insert_calls(self):
@@ -294,29 +297,29 @@ class ValidationTransformer:
     # have changed locations, and we need to adjust it.
     def _shift_witness(self, content):
         for s in content:
-            segment = s["segment"]
+            segment = s['segment']
             for w in segment:
-                waypoint = w["waypoint"]
+                waypoint = w['waypoint']
 
                 # We do not care about these locations anymore
-                if waypoint["type"] == "assumption" or waypoint["type"] == "branching":
+                if waypoint['type'] == 'assumption' or waypoint['type'] == 'branching':
                     continue
 
-                if waypoint["location"]["line"] in self._shift.keys():
+                if waypoint['location']['line'] in self._shift.keys():
                     add = 0
-                    for col in self._shift[waypoint["location"]["line"]]:
-                        if waypoint["location"]["column"] >= col:
-                            add += self._shift[waypoint["location"]["line"]][col]
-                    waypoint["location"]["column"] += add
+                    for col in self._shift[waypoint['location']['line']]:
+                        if waypoint['location']['column'] >= col:
+                            add += self._shift[waypoint['location']['line']][col]
+                    waypoint['location']['column'] += add
 
         # Shift end location of target
-        target = content[-1]["segment"][-1]["waypoint"]
-        if "location2" in target and target["location2"]["line"] in self._shift.keys():
+        target = content[-1]['segment'][-1]['waypoint']
+        if 'location2' in target and target['location2']['line'] in self._shift.keys():
             add = 0
-            for col in self._shift[waypoint["location2"]["line"]]:
-                if target["location2"]["column"] >= col:
-                    add += self._shift[target["location2"]["line"]][col]
-                target["location2"]["column"] += add
+            for col in self._shift[waypoint['location2']['line']]:
+                if target['location2']['column'] >= col:
+                    add += self._shift[target['location2']['line']][col]
+                target['location2']['column'] += add
 
         return content
 
@@ -326,7 +329,7 @@ class ValidationTransformer:
                 if self.c_lines[startline - 1][col - 1] == '?':
                     return startline, col
         else:
-            for col in range(startcol, len(self.c_lines[line - 1])):
+            for col in range(startcol, len(self.c_lines[startline - 1])):
                 if self.c_lines[startline - 1][col - 1] == '?':
                     return startline, col
             for line in range(startline + 1, endline):
@@ -342,7 +345,7 @@ class ValidationTransformer:
 
 def create_assumption(constraint, segment, follow, bracket):
     prefix = '{' if bracket else ''
-    call_scheme = 'if(__VALIDATOR_segment({seg})) __VALIDATOR_assume({constr}, {foll});'
+    call_scheme = 'if(__VALIDATOR_segment({seg})) __VALIDATOR_assume({constr}, {foll}); '
     call = prefix + call_scheme.format(constr=constraint.strip(';'), seg=segment, foll=1 if follow else 0)
     return call
 
