@@ -133,6 +133,8 @@ def set_witness_check(opts):
     opts.exit_on_error = False
     opts.noslice = True
     opts.report_type.append('sv-comp')
+    opts.no_instrument = True
+    opts.no_optimize = True
 
     enable_debug('all')
 

@@ -919,6 +919,7 @@ class SymbioticCC(object):
         return self.curfile
 
     def validation_preprocessing(self):
+        print_stdout('INFO: Starting witness preprocessing', color='WHITE')
         assert len(self.sources) == 1
         program_transformed =  os.path.basename(self.sources[0])
         witness_transformed =  os.path.basename(self.options.witness_check_file)
@@ -927,5 +928,6 @@ class SymbioticCC(object):
         
         self.options.witness_check_file = witness_transformed
         self.sources = [program_transformed]
+        print_stdout('INFO: Done witness preprocessing', color='WHITE')
         return 
 
