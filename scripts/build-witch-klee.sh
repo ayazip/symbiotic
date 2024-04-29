@@ -84,8 +84,8 @@ fi
 (build && make install) || exit 1
 
 mkdir -p $WKLEE_PREFIX/lib32/klee/runtime
-cp $LLVM_PREFIX/lib32/klee/runtime/* $WKLEE_PREFIX/lib32/klee/runtime \
-        || exitmsg "Cannot move 32-bit klee runtime lib files."
+cp $WKLEE_PREFIX/lib/klee/runtime/*32_*.bca $WKLEE_PREFIX/lib32/klee/runtime \
+        || exitmsg "Cannot move 32-bit Witch-Klee runtime lib files."
 
 # mv $WKLEE_PREFIX/lib64/klee $WKLEE_PREFIX/lib/klee || true
 # rmdir $WKLEE_PREFIX/lib64 || true
