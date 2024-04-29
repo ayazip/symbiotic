@@ -337,6 +337,15 @@ and may not work seamlessly):
 |IKOS        | `--target=ikos`      |
 |UAutomizer  | `--target=ultimate`  |
 
+### Witness validation
+
+By using the back-end Witch-Klee, Symbiotic can also be used in validation
+of violation witnesses. To do this, build symbiotic with the option `witch-klee`,
+or build [witch-klee](https://github.com/ayazip/witch-klee) separately and add
+the path to the witch-klee executable to PATH. Then, run Symbiotic with the
+option `--witness-check witness.yml`, where `witness.yml` is a witness in the
+witness format 2.0.
+
 ### CC mode
 
 Symbiotic can also just output the transformed bitcode or generate C code
