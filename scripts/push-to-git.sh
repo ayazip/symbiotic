@@ -173,6 +173,7 @@ git add \
 	bin/gen-c \
 	include/symbiotic.h \
 	include/symbiotic-size_t.h \
+        include/witch.h \
 	$(find lib -name '*.c')\
 	$(find . -name '*.bc')\
 	properties/* \
