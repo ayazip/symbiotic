@@ -54,7 +54,8 @@ class ValidationTransformer:
 
                 assert 'location' in waypoint.keys(), 'Missing waypoint location!'
                 assert 'file_name' in waypoint['location'].keys(), 'Missing filename in waypoint location!'
-                assert waypoint['location']['file_name'] == self.program_file, 'Filename in witness location does not match the program file'
+                assert waypoint['location']['file_name'].split('/')[-1] == self.program_file.split('/')[-1], \
+                            'Filename in witness location does not match the program file'
                 assert 'line' in waypoint['location'].keys(), 'Missing line in waypoint location!'
                 assert 'type' in waypoint.keys(), 'Missing waypoint type!'
                 assert 'action' in waypoint.keys(), 'Missing waypoint action!'
@@ -82,9 +83,11 @@ class ValidationTransformer:
                     map = self._branchings
                     self._switches[(line, col)] = None
 
-                assert map is not None, 'Unknown waypoint type!'
+                assert map is not None, 'Unknown waypoint type:' + waypoint['type']
 
                 map[(line, col)] = None
+        
+        assert self._target, "Missing target waypoint!"
 
     # Traverse the AST, find the locations mentioned in the witness and store information
     # about them in one of: _calls, _assumptions, _branchings, _target.
@@ -164,7 +167,7 @@ class ValidationTransformer:
 
         if q_loc in self._branchings:
             self._add_branchinfo(q_loc[1], q_loc, ctrl_expr.extent)
-        if (q_loc[0], 0) in self._branchings:
+        if (q_loc[0], 0) in self._branchings and not self._branchings[(q_loc[0], 0)]:
             self._add_branchinfo(q_loc[1], (q_loc[0], 0), ctrl_expr.extent)
 
     def _handle_branching(self, node, loc):
@@ -181,6 +184,12 @@ class ValidationTransformer:
         if node.kind == clang.cindex.CursorKind.DO_STMT:
             ctrl_expr = children[1]
             self._add_branchinfo(col, loc, ctrl_expr.extent)
+
+        if node.kind == clang.cindex.CursorKind.FOR_STMT:
+            extent = children[1].extent
+            self._branchings[loc] = (extent.start.line, extent.start.column), \
+                                    (extent.end.line, extent.end.column -1), \
+                                    col
 
         if node.kind == clang.cindex.CursorKind.SWITCH_STMT:
             ctrl_expr = children[0]
@@ -353,7 +362,7 @@ def create_assumption(constraint, segment, follow, bracket):
 def is_statement(parent, child_index, child):
     types = clang.cindex.CursorKind
 
-    if parent.kind == types.COMPOUND_STMT or child.is_statement():
+    if parent.kind == types.COMPOUND_STMT or child.kind.is_statement():
         return True
 
     if (parent.kind == types.WHILE_STMT
