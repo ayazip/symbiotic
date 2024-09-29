@@ -7,8 +7,8 @@ if [ ! -d ${LLVMLITE_DIR} ];then
     git clone https://github.com/mchalupa/llvmlite
 fi
 if [ ! -d ${SLOWBEAST_DIR} ];then
-    # git clone https://gitlab.com/mchalupa/slowbeast
-    git clone https://gitlab.fi.muni.cz/xkumor/slowbeastcse.git slowbeast
+    git clone https://gitlab.com/mchalupa/slowbeast
+    #git clone https://gitlab.fi.muni.cz/xkumor/slowbeastcse.git slowbeast
 
 fi
 
