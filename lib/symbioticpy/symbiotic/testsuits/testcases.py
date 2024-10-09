@@ -223,8 +223,8 @@ class TestCaseWriter(object):
     def parseTest(self, pathFile, filename=None):
         """
         Parse .path file from klee
-        \param pathFile     the .path file
-        \param filename     name of the file the symbiotic ran on
+        @param pathFile     the .path file
+        @param filename     name of the file the symbiotic ran on
                             -- in the case that we want to stick
                             only to this file in the witness
         """
